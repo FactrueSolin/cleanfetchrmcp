@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use fantoccini::ClientBuilder;
+use futures::future::join_all;
 
 pub async fn fetch_html(selenium_url: &str, url: &str) -> Result<String, String> {
     let client = ClientBuilder::native()
@@ -26,9 +27,10 @@ pub async fn fetch_html(selenium_url: &str, url: &str) -> Result<String, String>
 }
 
 pub async fn fetch_html_batch(selenium_url: &str, urls: &[String]) -> Vec<Result<String, String>> {
-    let mut out = Vec::with_capacity(urls.len());
-    for url in urls {
-        out.push(fetch_html(selenium_url, url).await);
-    }
-    out
+    let futures: Vec<_> = urls
+        .iter()
+        .map(|url| fetch_html(selenium_url, url))
+        .collect();
+
+    join_all(futures).await
 }
