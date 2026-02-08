@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM rust:1.88-bookworm AS builder
 
 WORKDIR /app
@@ -12,7 +14,11 @@ COPY Cargo.toml Cargo.lock ./
 COPY .cargo ./.cargo
 COPY src ./src
 
-RUN cargo build --release --locked
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release --locked \
+    && cp /app/target/release/cleanfetchrmcp /app/cleanfetchrmcp
 
 
 FROM debian:bookworm-slim AS runtime
@@ -24,7 +30,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --create-home appuser
 
-COPY --from=builder /app/target/release/cleanfetchrmcp /usr/local/bin/cleanfetchrmcp
+COPY --from=builder /app/cleanfetchrmcp /usr/local/bin/cleanfetchrmcp
 
 ENV PORT=3000 \
     SELENIUM_URL=http://selenium:4444 \
