@@ -3,6 +3,7 @@ use std::time::Duration;
 use fantoccini::ClientBuilder;
 use futures::future::join_all;
 use serde_json::{Map, json};
+use url::Url;
 
 pub async fn fetch_html(
     selenium_url: &str,
@@ -55,7 +56,14 @@ pub async fn fetch_html_batch(
 ) -> Vec<Result<String, String>> {
     let futures: Vec<_> = urls
         .iter()
-        .map(|url| fetch_html(selenium_url, url, proxy_url))
+        .map(|url| async move {
+            match Url::parse(url) {
+                Ok(parsed) if matches!(parsed.scheme(), "http" | "https") => {
+                    fetch_html(selenium_url, url, proxy_url).await
+                }
+                _ => Err("invalid url".to_string()),
+            }
+        })
         .collect();
 
     join_all(futures).await
