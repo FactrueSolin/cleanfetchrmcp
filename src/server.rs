@@ -17,12 +17,41 @@ pub struct FetchServer {
     proxy_url: Option<String>,
 }
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct FetchUrlsParams {
-    #[schemars(description = "要抓取的 URL 列表，至少一个")]
-    pub urls: Vec<String>,
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum FetchKind {
+    Markdown,
+    Text,
+    Urls,
+    Html,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CleanFetchParams {
+    #[schemars(description = "要抓取的 URL 列表，至少一个")]
+    pub urls: Vec<String>,
+    #[schemars(description = "返回类型：markdown | text | urls | html")]
+    pub kind: FetchKind,
+}
+
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+pub struct CleanFetchItem {
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub markdown: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub urls_markdown: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub html: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/*
 #[derive(Debug, Serialize)]
 struct MarkdownResult {
     url: String,
@@ -58,6 +87,7 @@ struct HtmlResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
+*/
 
 #[tool_router]
 impl FetchServer {
@@ -74,10 +104,10 @@ impl FetchServer {
         }
     }
 
-    #[tool(description = "抓取多个URL并返回Markdown（按128000总词数限制截断）")]
-    async fn fetch_markdown(
+    #[tool(description = "抓取多个URL并按 kind 返回统一 cleanfetch 结果")]
+    async fn cleanfetch(
         &self,
-        Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
+        Parameters(CleanFetchParams { urls, kind }): Parameters<CleanFetchParams>,
     ) -> Result<CallToolResult, McpError> {
         if urls.is_empty() {
             return Ok(text_result_json("[]".to_string()));
@@ -86,50 +116,94 @@ impl FetchServer {
         let htmls =
             fetcher::fetch_html_batch(&self.selenium_url, &urls, self.proxy_url.as_deref()).await;
 
-        let mut markdowns: Vec<Option<String>> = Vec::with_capacity(urls.len());
-        let mut succ_texts = Vec::new();
-        let mut succ_index = Vec::new();
+        let mut datas: Vec<Option<String>> = vec![None; urls.len()];
         let mut errors: Vec<Option<String>> = vec![None; urls.len()];
+
+        let mut succ_texts: Vec<String> = Vec::new();
+        let mut succ_index: Vec<usize> = Vec::new();
 
         for (idx, item) in htmls.iter().enumerate() {
             match item {
                 Ok(html) => {
-                    let md = html_to_markdown(html);
-                    succ_texts.push(md.clone());
-                    succ_index.push(idx);
-                    markdowns.push(Some(md));
+                    let data = match kind {
+                        FetchKind::Markdown => html_to_markdown(html),
+                        FetchKind::Text => html_to_text(html),
+                        FetchKind::Urls => html_to_urls_markdown(html, &urls[idx]),
+                        FetchKind::Html => html.clone(),
+                    };
+
+                    if matches!(kind, FetchKind::Markdown | FetchKind::Text) {
+                        succ_texts.push(data.clone());
+                        succ_index.push(idx);
+                    }
+
+                    datas[idx] = Some(data);
                 }
                 Err(e) => {
-                    markdowns.push(None);
                     errors[idx] = Some(e.clone());
                 }
             }
         }
 
-        let limits = limit::limit_items(&succ_texts);
-        for (pos, lim) in limits.iter().enumerate() {
-            if !lim.include {
-                let idx = succ_index[pos];
-                markdowns[idx] = None;
-                errors[idx] = Some(
-                    lim.error
-                        .clone()
-                        .unwrap_or_else(|| limit::ERROR_MESSAGE.to_string()),
-                );
+        if matches!(kind, FetchKind::Markdown | FetchKind::Text) {
+            let limits = limit::limit_items(&succ_texts);
+            for (pos, lim) in limits.iter().enumerate() {
+                if !lim.include {
+                    let idx = succ_index[pos];
+                    datas[idx] = None;
+                    errors[idx] = Some(
+                        lim.error
+                            .clone()
+                            .unwrap_or_else(|| limit::ERROR_MESSAGE.to_string()),
+                    );
+                }
             }
         }
 
-        let payload: Vec<MarkdownResult> = urls
+        let payload: Vec<CleanFetchItem> = urls
             .iter()
             .enumerate()
-            .map(|(idx, url)| MarkdownResult {
-                url: url.clone(),
-                markdown: markdowns[idx].clone(),
-                error: errors[idx].clone(),
+            .map(|(idx, url)| {
+                let data = datas[idx].clone();
+                let markdown = match kind {
+                    FetchKind::Markdown => data.clone(),
+                    _ => None,
+                };
+                let text = match kind {
+                    FetchKind::Text => data.clone(),
+                    _ => None,
+                };
+                let urls_markdown = match kind {
+                    FetchKind::Urls => data.clone(),
+                    _ => None,
+                };
+                let html = match kind {
+                    FetchKind::Html => data.clone(),
+                    _ => None,
+                };
+
+                CleanFetchItem {
+                    url: url.clone(),
+                    data,
+                    markdown,
+                    text,
+                    urls_markdown,
+                    html,
+                    error: errors[idx].clone(),
+                }
             })
             .collect();
 
         Ok(text_result_json(to_json(payload)))
+    }
+
+    /*
+    #[tool(description = "抓取多个URL并返回Markdown（按128000总词数限制截断）")]
+    async fn fetch_markdown(
+        &self,
+        Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
+    ) -> Result<CallToolResult, McpError> {
+        // deprecated: replaced by cleanfetch(kind=markdown)
     }
 
     #[tool(description = "抓取多个URL并返回纯文本（去URL，按128000总词数限制截断）")]
@@ -137,57 +211,7 @@ impl FetchServer {
         &self,
         Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
     ) -> Result<CallToolResult, McpError> {
-        if urls.is_empty() {
-            return Ok(text_result_json("[]".to_string()));
-        }
-
-        let htmls =
-            fetcher::fetch_html_batch(&self.selenium_url, &urls, self.proxy_url.as_deref()).await;
-
-        let mut texts: Vec<Option<String>> = Vec::with_capacity(urls.len());
-        let mut succ_texts = Vec::new();
-        let mut succ_index = Vec::new();
-        let mut errors: Vec<Option<String>> = vec![None; urls.len()];
-
-        for (idx, item) in htmls.iter().enumerate() {
-            match item {
-                Ok(html) => {
-                    let txt = html_to_text(html);
-                    succ_texts.push(txt.clone());
-                    succ_index.push(idx);
-                    texts.push(Some(txt));
-                }
-                Err(e) => {
-                    texts.push(None);
-                    errors[idx] = Some(e.clone());
-                }
-            }
-        }
-
-        let limits = limit::limit_items(&succ_texts);
-        for (pos, lim) in limits.iter().enumerate() {
-            if !lim.include {
-                let idx = succ_index[pos];
-                texts[idx] = None;
-                errors[idx] = Some(
-                    lim.error
-                        .clone()
-                        .unwrap_or_else(|| limit::ERROR_MESSAGE.to_string()),
-                );
-            }
-        }
-
-        let payload: Vec<TextResult> = urls
-            .iter()
-            .enumerate()
-            .map(|(idx, url)| TextResult {
-                url: url.clone(),
-                text: texts[idx].clone(),
-                error: errors[idx].clone(),
-            })
-            .collect();
-
-        Ok(text_result_json(to_json(payload)))
+        // deprecated: replaced by cleanfetch(kind=text)
     }
 
     #[tool(description = "抓取多个URL并提取页面链接，返回Markdown列表")]
@@ -195,26 +219,7 @@ impl FetchServer {
         &self,
         Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
     ) -> Result<CallToolResult, McpError> {
-        let htmls =
-            fetcher::fetch_html_batch(&self.selenium_url, &urls, self.proxy_url.as_deref()).await;
-        let payload: Vec<UrlsResult> = urls
-            .iter()
-            .enumerate()
-            .map(|(idx, url)| match &htmls[idx] {
-                Ok(html) => UrlsResult {
-                    url: url.clone(),
-                    urls_markdown: Some(html_to_urls_markdown(html, url)),
-                    error: None,
-                },
-                Err(e) => UrlsResult {
-                    url: url.clone(),
-                    urls_markdown: None,
-                    error: Some(e.clone()),
-                },
-            })
-            .collect();
-
-        Ok(text_result_json(to_json(payload)))
+        // deprecated: replaced by cleanfetch(kind=urls)
     }
 
     #[tool(description = "抓取多个URL并返回原始HTML")]
@@ -222,27 +227,9 @@ impl FetchServer {
         &self,
         Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
     ) -> Result<CallToolResult, McpError> {
-        let htmls =
-            fetcher::fetch_html_batch(&self.selenium_url, &urls, self.proxy_url.as_deref()).await;
-        let payload: Vec<HtmlResult> = urls
-            .iter()
-            .enumerate()
-            .map(|(idx, url)| match &htmls[idx] {
-                Ok(html) => HtmlResult {
-                    url: url.clone(),
-                    html: Some(html.clone()),
-                    error: None,
-                },
-                Err(e) => HtmlResult {
-                    url: url.clone(),
-                    html: None,
-                    error: Some(e.clone()),
-                },
-            })
-            .collect();
-
-        Ok(text_result_json(to_json(payload)))
+        // deprecated: replaced by cleanfetch(kind=html)
     }
+    */
 }
 
 #[tool_handler]
@@ -250,7 +237,7 @@ impl ServerHandler for FetchServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
             instructions: Some(
-                "Fetch MCP server with tools: fetch_markdown, fetch_txt, fetch_urls, fetch_html"
+                "Fetch MCP server with unified tool: cleanfetch (kind: markdown | text | urls | html)"
                     .to_string(),
             ),
             capabilities: ServerCapabilities::builder().enable_tools().build(),
