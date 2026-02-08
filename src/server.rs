@@ -1,3 +1,5 @@
+use std::env;
+
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -12,6 +14,7 @@ use crate::{fetcher, html_to_markdown, html_to_text, html_to_urls_markdown, limi
 pub struct FetchServer {
     tool_router: ToolRouter<Self>,
     selenium_url: String,
+    proxy_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -59,9 +62,15 @@ struct HtmlResult {
 #[tool_router]
 impl FetchServer {
     pub fn new(selenium_url: String) -> Self {
+        let proxy_url = env::var("PROXY_URL")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+
         Self {
             tool_router: Self::tool_router(),
             selenium_url,
+            proxy_url,
         }
     }
 
@@ -74,7 +83,8 @@ impl FetchServer {
             return Ok(text_result_json("[]".to_string()));
         }
 
-        let htmls = fetcher::fetch_html_batch(&self.selenium_url, &urls).await;
+        let htmls =
+            fetcher::fetch_html_batch(&self.selenium_url, &urls, self.proxy_url.as_deref()).await;
 
         let mut markdowns: Vec<Option<String>> = Vec::with_capacity(urls.len());
         let mut succ_texts = Vec::new();
@@ -131,7 +141,8 @@ impl FetchServer {
             return Ok(text_result_json("[]".to_string()));
         }
 
-        let htmls = fetcher::fetch_html_batch(&self.selenium_url, &urls).await;
+        let htmls =
+            fetcher::fetch_html_batch(&self.selenium_url, &urls, self.proxy_url.as_deref()).await;
 
         let mut texts: Vec<Option<String>> = Vec::with_capacity(urls.len());
         let mut succ_texts = Vec::new();
@@ -184,7 +195,8 @@ impl FetchServer {
         &self,
         Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
     ) -> Result<CallToolResult, McpError> {
-        let htmls = fetcher::fetch_html_batch(&self.selenium_url, &urls).await;
+        let htmls =
+            fetcher::fetch_html_batch(&self.selenium_url, &urls, self.proxy_url.as_deref()).await;
         let payload: Vec<UrlsResult> = urls
             .iter()
             .enumerate()
@@ -210,7 +222,8 @@ impl FetchServer {
         &self,
         Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
     ) -> Result<CallToolResult, McpError> {
-        let htmls = fetcher::fetch_html_batch(&self.selenium_url, &urls).await;
+        let htmls =
+            fetcher::fetch_html_batch(&self.selenium_url, &urls, self.proxy_url.as_deref()).await;
         let payload: Vec<HtmlResult> = urls
             .iter()
             .enumerate()

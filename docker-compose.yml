@@ -12,6 +12,7 @@ services:
     environment:
       PORT: "3000"
       SELENIUM_URL: "http://selenium:4444"
+      PROXY_URL: "${PROXY_URL:-}"
       RUST_LOG: "info,cleanfetchrmcp=debug"
     depends_on:
       - selenium
@@ -35,4 +36,3 @@ services:
 networks:
   mcpnet:
     driver: bridge
-

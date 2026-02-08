@@ -2,9 +2,31 @@ use std::time::Duration;
 
 use fantoccini::ClientBuilder;
 use futures::future::join_all;
+use serde_json::{Map, json};
 
-pub async fn fetch_html(selenium_url: &str, url: &str) -> Result<String, String> {
-    let client = ClientBuilder::native()
+pub async fn fetch_html(
+    selenium_url: &str,
+    url: &str,
+    proxy_url: Option<&str>,
+) -> Result<String, String> {
+    let mut caps = Map::new();
+    if let Some(proxy) = proxy_url {
+        caps.insert(
+            "proxy".to_string(),
+            json!({
+                "proxyType": "manual",
+                "httpProxy": proxy,
+                "sslProxy": proxy
+            }),
+        );
+    }
+
+    let mut builder = ClientBuilder::native();
+    if !caps.is_empty() {
+        builder.capabilities(caps);
+    }
+
+    let client = builder
         .connect(selenium_url)
         .await
         .map_err(|e| format!("connect selenium failed: {e}"))?;
@@ -26,10 +48,14 @@ pub async fn fetch_html(selenium_url: &str, url: &str) -> Result<String, String>
     result
 }
 
-pub async fn fetch_html_batch(selenium_url: &str, urls: &[String]) -> Vec<Result<String, String>> {
+pub async fn fetch_html_batch(
+    selenium_url: &str,
+    urls: &[String],
+    proxy_url: Option<&str>,
+) -> Vec<Result<String, String>> {
     let futures: Vec<_> = urls
         .iter()
-        .map(|url| fetch_html(selenium_url, url))
+        .map(|url| fetch_html(selenium_url, url, proxy_url))
         .collect();
 
     join_all(futures).await
