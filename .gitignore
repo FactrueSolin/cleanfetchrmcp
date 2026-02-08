@@ -1,0 +1,9 @@
+/target
+
+# Added by git-get
+rmcp-example
+
+# Added by git-get
+fetch-macp-example
+
+*.env
