@@ -11,6 +11,7 @@ services:
       PORT: "3000"
       SELENIUM_URL: "http://selenium:4444"
       PROXY_URL: "${PROXY_URL:-}"
+      MCP_AUTH_TOKEN: "${MCP_AUTH_TOKEN:-}"
       RUST_LOG: "info,cleanfetchrmcp=debug"
     depends_on:
       - selenium
