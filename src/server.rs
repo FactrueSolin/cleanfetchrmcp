@@ -104,7 +104,9 @@ impl FetchServer {
         }
     }
 
-    #[tool(description = "抓取多个URL并按 kind 返回统一 cleanfetch 结果")]
+    #[tool(
+        description = "可以同时抓取多个url，并且返回抓取结果。kind参数控制返回内容类型：markdown（转换后的Markdown文本），text（纯文本），urls（提取的页面链接列表），html（原始HTML）。"
+    )]
     async fn cleanfetch(
         &self,
         Parameters(CleanFetchParams { urls, kind }): Parameters<CleanFetchParams>,
