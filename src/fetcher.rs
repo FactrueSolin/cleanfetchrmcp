@@ -10,6 +10,8 @@ pub async fn fetch_html(
     url: &str,
     proxy_url: Option<&str>,
 ) -> Result<String, String> {
+    const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
+
     let mut caps = Map::new();
     if let Some(proxy) = proxy_url {
         caps.insert(
@@ -32,7 +34,7 @@ pub async fn fetch_html(
         .await
         .map_err(|e| format!("connect selenium failed: {e}"))?;
 
-    let result = async {
+    let result = match tokio::time::timeout(FETCH_TIMEOUT, async {
         client
             .goto(url)
             .await
@@ -42,8 +44,12 @@ pub async fn fetch_html(
             .source()
             .await
             .map_err(|e| format!("read html failed: {e}"))
-    }
-    .await;
+    })
+    .await
+    {
+        Ok(inner) => inner,
+        Err(_) => Err("fetch html timeout after 30s".to_string()),
+    };
 
     let _ = client.close().await;
     result
