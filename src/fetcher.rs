@@ -105,6 +105,8 @@ pub async fn fetch_html(
     }
 
     const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
+    const RENDER_WAIT_MS: u64 = 2000;
+    const DOM_STABLE_CHECK_MS: u64 = 500;
 
     let mut caps = Map::new();
     if let Some(proxy) = proxy_url {
@@ -133,7 +135,19 @@ pub async fn fetch_html(
             .goto(url)
             .await
             .map_err(|e| format!("navigate failed: {e}"))?;
-        tokio::time::sleep(Duration::from_millis(800)).await;
+
+        wait_for_ready_state_complete(&client).await?;
+
+        tokio::time::sleep(Duration::from_millis(RENDER_WAIT_MS)).await;
+
+        let initial_dom_size = get_dom_node_count(&client).await?;
+        tokio::time::sleep(Duration::from_millis(DOM_STABLE_CHECK_MS)).await;
+        let final_dom_size = get_dom_node_count(&client).await?;
+
+        if final_dom_size > initial_dom_size + 50 {
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+        }
+
         client
             .source()
             .await
@@ -147,6 +161,53 @@ pub async fn fetch_html(
 
     let _ = client.close().await;
     result
+}
+
+async fn wait_for_ready_state_complete(client: &fantoccini::Client) -> Result<(), String> {
+    const READY_STATE_TIMEOUT: Duration = Duration::from_secs(10);
+    const CHECK_INTERVAL: Duration = Duration::from_millis(100);
+    const MAX_ATTEMPTS: u32 = 100;
+
+    for _ in 0..MAX_ATTEMPTS {
+        let result = tokio::time::timeout(READY_STATE_TIMEOUT, async {
+            for _ in 0..MAX_ATTEMPTS {
+                match client.execute("return document.readyState", Vec::new()).await {
+                    Ok(json_result) => {
+                        if let Some(state) = json_result.as_str() {
+                            if state == "complete" {
+                                return Ok(());
+                            }
+                        }
+                    }
+                    Err(_) => {}
+                }
+                tokio::time::sleep(CHECK_INTERVAL).await;
+            }
+            Err("readyState did not become complete in time")
+        })
+        .await;
+
+        match result {
+            Ok(Ok(())) => return Ok(()),
+            Ok(Err(e)) => return Err(format!("wait for readyState failed: {e}")),
+            Err(_) => {}
+        }
+    }
+
+    Err("readyState check timeout".to_string())
+}
+
+async fn get_dom_node_count(client: &fantoccini::Client) -> Result<usize, String> {
+    let result = client
+        .execute("return document.documentElement.outerHTML.length", Vec::new())
+        .await
+        .map_err(|e| format!("get dom size failed: {e}"))?;
+
+    let count = result
+        .as_u64()
+        .ok_or_else(|| "get dom size returned non-integer".to_string())?;
+
+    Ok(count as usize)
 }
 
 pub async fn fetch_html_batch(
