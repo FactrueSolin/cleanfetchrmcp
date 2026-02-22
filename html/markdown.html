@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="/public/icon.png">
+    <title>Markdown</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            --bg-fallback: #F5F4ED;
+            --bg-image: url('/public/light.png');
+            --bg: var(--bg-image) top center/100% auto repeat-y, var(--bg-fallback);
+            --text: #262624;
+            --primary: #C96442;
+            --border: rgba(35, 35, 45, 0.12);
+            --muted: rgba(38, 38, 36, 0.68);
+            --surface: rgba(255, 255, 255, 0.7);
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --card-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+            --inline-code: rgb(203, 64, 66);
+            --inline-code-bg: rgba(203, 64, 66, 0.12);
+            --code-bg: rgba(255, 255, 255, 0.6);
+            --quote-bg: rgba(201, 100, 66, 0.08);
+            --quote-border: rgba(201, 100, 66, 0.45);
+            --table-stripe: rgba(35, 35, 45, 0.04);
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                color-scheme: light;
+                --bg-fallback: #F5F4ED;
+                --bg-image: url('/public/light.png');
+                --bg: var(--bg-image) top center/100% auto repeat-y, var(--bg-fallback);
+                --text: #262624;
+                --primary: #C96442;
+                --border: rgba(35, 35, 45, 0.12);
+                --muted: rgba(38, 38, 36, 0.68);
+                --surface: rgba(255, 255, 255, 0.7);
+                --card-bg: rgba(255, 255, 255, 0.85);
+                --card-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+                --inline-code: rgb(203, 64, 66);
+                --inline-code-bg: rgba(203, 64, 66, 0.12);
+                --code-bg: rgba(255, 255, 255, 0.6);
+                --quote-bg: rgba(201, 100, 66, 0.08);
+                --quote-border: rgba(201, 100, 66, 0.45);
+                --table-stripe: rgba(35, 35, 45, 0.04);
+            }
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                color-scheme: dark;
+                --bg-fallback: linear-gradient(135deg, #1e2d40 0%, #2d4059 45%, #3a506b 100%);
+                --bg-image: url('/public/night.png');
+                --bg: var(--bg-image) top center/100% auto repeat-y, var(--bg-fallback);
+                --text: #e0e7f1;
+                --primary: #a4c3b2;
+                --border: rgba(255, 255, 255, 0.15);
+                --muted: rgba(224, 231, 241, 0.72);
+                --surface: rgba(30, 45, 64, 0.65);
+                --card-bg: rgba(30, 45, 64, 0.72);
+                --card-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+                --inline-code: #a4c3b2;
+                --inline-code-bg: rgba(58, 80, 107, 0.3);
+                --code-bg: rgba(30, 45, 64, 0.7);
+                --quote-bg: rgba(164, 195, 178, 0.14);
+                --quote-border: rgba(164, 195, 178, 0.5);
+                --table-stripe: rgba(255, 255, 255, 0.05);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: "Hiragino Maru Gothic ProN", "Meiryo", "SF Pro", "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            letter-spacing: 0.018em;
+        }
+
+        .markdown-body {
+            width: min(880px, calc(100% - 48px));
+            max-width: 880px;
+            margin: 48px auto 64px;
+            padding: 24px 28px 72px;
+            line-height: 1.7;
+            font-size: 16px;
+            word-wrap: break-word;
+            border-radius: 14px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(6px);
+        }
+
+        .markdown-body p {
+            margin: 0 0 1.2em 0;
+        }
+
+        .markdown-body h1,
+        .markdown-body h2,
+        .markdown-body h3,
+        .markdown-body h4,
+        .markdown-body h5,
+        .markdown-body h6 {
+            margin: 1.6em 0 0.7em;
+            font-weight: 700;
+            line-height: 1.25;
+            color: var(--text);
+        }
+
+        .markdown-body h1 {
+            font-size: 2.25rem;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 0.35em;
+        }
+
+        .markdown-body h2 {
+            font-size: 1.7rem;
+            padding-bottom: 0.3em;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .markdown-body h3 {
+            font-size: 1.3rem;
+        }
+
+        .markdown-body h4 {
+            font-size: 1.1rem;
+        }
+
+        .markdown-body h5 {
+            font-size: 1rem;
+        }
+
+        .markdown-body h6 {
+            font-size: 0.95rem;
+            color: var(--muted);
+        }
+
+        .markdown-body code {
+            padding: 0.2em 0.4em;
+            margin: 0 0.1em;
+            font-size: 0.95em;
+            background: var(--inline-code-bg);
+            color: var(--inline-code);
+            border-radius: 6px;
+            font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        .markdown-body pre {
+            margin: 1.3em 0;
+            padding: 18px 20px;
+            overflow: auto;
+            background: var(--code-bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+        }
+
+        .markdown-body pre code {
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            border-radius: 0;
+            font-size: 0.92em;
+            line-height: 1.65;
+            display: block;
+            color: inherit;
+        }
+
+        .markdown-body table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5em 0;
+            background: var(--surface);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .markdown-body th,
+        .markdown-body td {
+            border: 1px solid var(--border);
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        .markdown-body th {
+            font-weight: 700;
+        }
+
+        .markdown-body tr:nth-child(even) {
+            background: var(--table-stripe);
+        }
+
+        .markdown-body blockquote {
+            margin: 1.4em 0;
+            padding: 0.4em 1.2em;
+            color: var(--muted);
+            border-left: 4px solid var(--quote-border);
+            background: var(--quote-bg);
+            border-radius: 8px;
+        }
+
+        .markdown-body blockquote p {
+            margin: 0.6em 0;
+        }
+
+        .markdown-body img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 12px;
+            display: block;
+            margin: 1.2em auto;
+        }
+
+        .markdown-body ul,
+        .markdown-body ol {
+            padding-left: 1.5em;
+            margin: 0 0 1.1em 0;
+        }
+
+        .markdown-body li {
+            margin: 0.4em 0;
+        }
+
+        .markdown-body li::marker {
+            color: var(--primary);
+        }
+
+        .markdown-body .task-list-item {
+            list-style: none;
+        }
+
+        .markdown-body .task-list-item input[type="checkbox"] {
+            margin-right: 0.5em;
+            transform: translateY(2px);
+        }
+
+        .markdown-body hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 2.2em 0;
+        }
+
+        .markdown-body a {
+            color: var(--primary);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .markdown-body a:hover {
+            color: color-mix(in srgb, var(--primary) 80%, #000 20%);
+            text-decoration: underline;
+        }
+
+        .toc-container {
+            position: fixed;
+            top: 120px;
+            left: calc(50% + 440px + 16px);
+            width: 192px;
+            max-height: calc(100vh - 160px);
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--surface);
+            backdrop-filter: blur(10px);
+            overflow: auto;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+            z-index: 20;
+        }
+
+        .toc-title {
+            margin: 0 0 8px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--muted);
+            letter-spacing: 0.04em;
+        }
+
+        .toc-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .toc-list li {
+            margin: 6px 0;
+            line-height: 1.4;
+        }
+
+        .toc-list a {
+            color: var(--text);
+            font-size: 0.9rem;
+            display: inline-block;
+        }
+
+        .toc-list .toc-level-2 {
+            padding-left: 8px;
+        }
+
+        .toc-list .toc-level-3 {
+            padding-left: 16px;
+        }
+
+        .toc-list .toc-level-4 {
+            padding-left: 24px;
+        }
+
+        @media (max-width: 1180px) {
+            .toc-container {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    {{site_header}}
+    <aside class="toc-container" id="toc" aria-label="目录">
+        <div class="toc-title">目录</div>
+        <ul class="toc-list" id="toc-list"></ul>
+    </aside>
+    <main class="markdown-body">
+        {{markdown_html}}
+    </main>
+    <script>
+        (function () {
+            const toc = document.getElementById("toc");
+            const tocList = document.getElementById("toc-list");
+            const headings = document.querySelectorAll(".markdown-body h2, .markdown-body h3, .markdown-body h4");
+
+            if (!toc || !tocList || headings.length === 0) {
+                if (toc) {
+                    toc.style.display = "none";
+                }
+                return;
+            }
+
+            const slugify = (text) => text
+                .trim()
+                .toLowerCase()
+                .replace(/[^\w\u4e00-\u9fa5\s-]/g, "")
+                .replace(/\s+/g, "-");
+
+            const usedIds = new Map();
+
+            headings.forEach((heading) => {
+                if (!heading.id) {
+                    const baseId = slugify(heading.textContent || "");
+                    const count = usedIds.get(baseId) || 0;
+                    usedIds.set(baseId, count + 1);
+                    heading.id = count ? `${baseId}-${count}` : baseId || `section-${usedIds.size}`;
+                }
+
+                const level = Number(heading.tagName.replace("H", ""));
+                const li = document.createElement("li");
+                li.className = `toc-level-${level}`;
+
+                const link = document.createElement("a");
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent || "";
+
+                li.appendChild(link);
+                tocList.appendChild(li);
+            });
+        })();
+    </script>
+</body>
+
+</html>

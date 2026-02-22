@@ -8,7 +8,7 @@ use rmcp::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{fetcher, html_to_markdown, html_to_text, html_to_urls_markdown, limit};
+use crate::{fetcher, html_to_markdown, html_to_text, html_to_urls_markdown, limit, markdown_to_image};
 
 #[derive(Debug, Clone)]
 pub struct FetchServer {
@@ -24,6 +24,18 @@ pub enum FetchKind {
     Text,
     Urls,
     Html,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct HtmlToImageParams {
+    #[schemars(description = "原始 HTML 内容")]
+    pub html: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct MarkdownToImageParams {
+    #[schemars(description = "Markdown 内容")]
+    pub markdown: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -105,7 +117,7 @@ impl FetchServer {
     }
 
     #[tool(
-        description = "可以同时抓取多个url，并且返回抓取结果。kind参数控制返回内容类型：markdown（转换后的Markdown文本），text（纯文本），urls（提取的页面链接列表），html（原始HTML）。"
+        description = "可以同时抓取多个 url，并且返回抓取结果。kind 参数控制返回内容类型：markdown（转换后的 Markdown 文本），text（纯文本），urls（提取的页面链接列表），html（原始 HTML）。"
     )]
     async fn cleanfetch(
         &self,
@@ -199,39 +211,35 @@ impl FetchServer {
         Ok(text_result_json(to_json(payload)))
     }
 
-    /*
-    #[tool(description = "抓取多个URL并返回Markdown（按128000总词数限制截断）")]
-    async fn fetch_markdown(
+    #[tool(description = "将原始 HTML 转换为图片，返回 base64 编码的 PNG 图片")]
+    async fn html_to_image(
         &self,
-        Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
+        Parameters(HtmlToImageParams { html }): Parameters<HtmlToImageParams>,
     ) -> Result<CallToolResult, McpError> {
-        // deprecated: replaced by cleanfetch(kind=markdown)
+        let base64_data = crate::html_to_image::html_to_image(&self.selenium_url, &html)
+            .await
+            .map_err(|e| McpError::internal_error(e, None))?;
+
+        Ok(CallToolResult::success(vec![Content::image(
+            base64_data,
+            "image/png",
+        )]))
     }
 
-    #[tool(description = "抓取多个URL并返回纯文本（去URL，按128000总词数限制截断）")]
-    async fn fetch_txt(
+    #[tool(description = "将 Markdown 渲染为图片，返回 base64 编码的 PNG 图片")]
+    async fn markdown_to_image(
         &self,
-        Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
+        Parameters(MarkdownToImageParams { markdown }): Parameters<MarkdownToImageParams>,
     ) -> Result<CallToolResult, McpError> {
-        // deprecated: replaced by cleanfetch(kind=text)
-    }
+        let base64_data = markdown_to_image::markdown_to_image(&self.selenium_url, &markdown)
+            .await
+            .map_err(|e| McpError::internal_error(e, None))?;
 
-    #[tool(description = "抓取多个URL并提取页面链接，返回Markdown列表")]
-    async fn fetch_urls(
-        &self,
-        Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
-    ) -> Result<CallToolResult, McpError> {
-        // deprecated: replaced by cleanfetch(kind=urls)
+        Ok(CallToolResult::success(vec![Content::image(
+            base64_data,
+            "image/png",
+        )]))
     }
-
-    #[tool(description = "抓取多个URL并返回原始HTML")]
-    async fn fetch_html(
-        &self,
-        Parameters(FetchUrlsParams { urls }): Parameters<FetchUrlsParams>,
-    ) -> Result<CallToolResult, McpError> {
-        // deprecated: replaced by cleanfetch(kind=html)
-    }
-    */
 }
 
 #[tool_handler]

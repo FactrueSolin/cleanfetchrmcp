@@ -1,7 +1,9 @@
 pub mod converter;
 pub mod entities;
 pub mod fetcher;
+pub mod html_to_image;
 pub mod limit;
+pub mod markdown_to_image;
 pub mod parser;
 pub mod server;
 pub mod text;

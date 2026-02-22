@@ -8,7 +8,8 @@ use url::Url;
 
 pub fn is_html_complete(html: &str) -> bool {
     const MIN_HTML_LEN: usize = 500;
-    const SPA_PLACEHOLDER_MAX_BODY_LEN: usize = 200;
+    const SPA_ROOT_MAX_BODY_LEN: usize = 1000;
+    const SPA_SCRIPT_MAX_BODY_LEN: usize = 2000;
 
     if html.len() < MIN_HTML_LEN {
         return false;
@@ -41,14 +42,45 @@ pub fn is_html_complete(html: &str) -> bool {
     };
 
     let body_content = lower[body_content_start..body_end].trim();
+    let body_content_len = body_content.len();
 
-    let is_root_placeholder = body_content.contains("<div id=\"root\"></div>")
-        || body_content.contains("<div id='root'></div>")
-        || body_content.contains("<div id=\"app\"></div>")
-        || body_content.contains("<div id='app'></div>");
+    // 检测 SPA 根元素特征
+    let has_spa_root = body_content.contains("<div id=\"root\"")
+        || body_content.contains("<div id='root'")
+        || body_content.contains("<div id=\"app\"")
+        || body_content.contains("<div id='app'")
+        || body_content.contains("<div id=\"__next\"")
+        || body_content.contains("<div id='__next'")
+        || body_content.contains("<div id=\"__nuxt\"")
+        || body_content.contains("<div id='__nuxt'");
 
-    if is_root_placeholder && body_content.len() <= SPA_PLACEHOLDER_MAX_BODY_LEN {
+    if has_spa_root && body_content_len < SPA_ROOT_MAX_BODY_LEN {
         return false;
+    }
+
+    // 检测常见的 SPA 加载指示器
+    let loading_indicators = [
+        "loading...", "loading…", "加载中", "正在加载",
+        "class=\"loading\"", "class='loading'",
+        "class=\"spinner\"", "class='spinner'",
+        "<noscript>", "please enable javascript", "please enable javascript in your browser",
+    ];
+    for indicator in &loading_indicators {
+        if body_content.contains(indicator) {
+            return false;
+        }
+    }
+
+    // 检测 JS 框架脚本标签
+    let framework_scripts = [
+        "react", "vue", "angular", "next", "nuxt", "webpack",
+    ];
+    for framework in &framework_scripts {
+        if lower.contains(&format!("<script")) && lower.contains(framework) {
+            if body_content_len < SPA_SCRIPT_MAX_BODY_LEN {
+                return false;
+            }
+        }
     }
 
     true
